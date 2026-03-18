@@ -20,7 +20,7 @@ File         outFile;
 void openImageFile()
 {
   char name[16] = {0};
-  sprintf(name, "%10lu.jpg", millis() - start);
+  sprintf(name, "%lu.jpg", millis() - start);
   outFile = SD.open(name, FILE_WRITE);
   if (!outFile)
   {
