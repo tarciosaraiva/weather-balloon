@@ -6,9 +6,9 @@ Arduino Uno R4 Minima payload for a high-altitude balloon launch.
 
 | Component | Pin |
 |---|---|
-| Built-in LED (GPS indicator) | LED_BUILTIN |
 | Arducam Mega (CS) | 7 |
 | SD Card module (CS) | 9 |
+| U-blox NEO-6M GPS (TX → RX1) | 0 |
 
 | SPI | Pin | Color |
 |---|---|---|
@@ -20,8 +20,8 @@ Arduino Uno R4 Minima payload for a high-altitude balloon launch.
 
 ## What it does
 
-On boot, initialises serial, SD card, camera, and BME280 atmospheric sensor. Then loops every 5 seconds:
-takes a FHD JPEG photo, writes it to the SD card, and prints temperature, humidity, and pressure over serial.
+On boot, initialises serial (USB + Serial1 for GPS), SD card, camera, and BME280 atmospheric sensor. Then loops every 10 seconds:
+takes a FHD JPEG photo, writes it to the SD card, prints GPS fix status, coordinates, satellite count, time and date, then prints temperature, humidity, and pressure over serial.
 
 Images are saved as `<elapsed_ms>.jpg` (milliseconds since boot).
 
@@ -39,5 +39,5 @@ pio device monitor   # serial output at 9600 baud
 
 - [Arducam_Mega](https://github.com/ArduCAM/Arducam_Mega)
 - [Adafruit BME280 Library](https://github.com/adafruit/Adafruit_BME280_Library)
-- [TinyGPSPlus](https://github.com/mikalhart/TinyGPSPlus) *(included but GPS currently disabled)*
+- GPSParser (local library — `lib/GPSParser/`)
 - SD (built-in Arduino library)
