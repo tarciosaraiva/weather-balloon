@@ -23,7 +23,7 @@ class GPSData {
       pdop = 0.0;
       vdop = 0.0;
     }
-    
+
     bool has_fix;
     float latitude;
     float longitude;
@@ -45,18 +45,18 @@ class GPSReader {
     const unsigned long timeout_ms = 500;  // 500ms timeout between message parts
     GPSData current_data;
     bool has_new_data;
-    
+
     void _process_buffer();
     GPSData _process_nmea_data(String nmea_data);
     void _parse_rmc(String sentence, GPSData &gps_data);
     void _parse_gga(String sentence, GPSData &gps_data);
     void _parse_gsa(String sentence, GPSData &gps_data);
-    
+
   public:
     GPSReader(Stream &serial_port);
     bool update();
     GPSData get_data();
-    
+
     // Convenience methods for direct access to GPS data
     float latitude();
     float longitude();
@@ -69,6 +69,6 @@ class GPSReader {
 };
 
 // For backward compatibility
-GPSData parse_gps_data(String nmea_chunk);
+// GPSData parse_gps_data(String nmea_chunk);
 
 #endif

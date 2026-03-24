@@ -1,18 +1,14 @@
-#include <Arduino.h>
-#include <SD.h>
-#include <Arducam_Mega.h>
 #include <Adafruit_BME280.h>
-// #include <SoftwareSerial.h>
-// #include <TinyGPS++.h>
+#include <Arducam_Mega.h>
+#include <Arduino.h>
+#include <GPSParser.h>
+#include <SD.h>
 
 // constants
 constexpr int CAM_BUFFER_SIZE = 255;
-constexpr int GPS_TX_PIN = 2;
-constexpr int GPS_RX_PIN = 3;
 constexpr int CAMERA_PIN = 7;
 constexpr int SD_CARD_PIN = 9;
 constexpr int BME_AWS_ADDR = 0x77;
-// constexpr int GPS_LED = LED_BUILTIN;
 
 // globals
 unsigned long start = 0;
@@ -21,8 +17,7 @@ unsigned long captureStart = 0;
 Adafruit_BME280 bme;
 Arducam_Mega myCAM(CAMERA_PIN);
 File outFile;
-// TinyGPSPlus gps;
-// SoftwareSerial ss(GPS_RX_PIN, GPS_TX_PIN);
+GPSReader gps(Serial1);
 
 void openImageFile()
 {
@@ -66,7 +61,8 @@ void captureImage()
 void setupSerial()
 {
   Serial.begin(9600);
-  while(!Serial);
+  Serial1.begin(9600);
+  while(!Serial && !Serial1);
   Serial.println(F("Serial ready."));
 }
 
@@ -115,75 +111,32 @@ void setup()
   setupBME280();
 }
 
-// void displayInfo()
-// {
-//   Serial.print(F("Location: "));
-//   if (gps.location.isValid())
-//   {
-//     Serial.print(gps.location.lat(), 6);
-//     Serial.print(F(","));
-//     Serial.print(gps.location.lng(), 6);
-//   }
-//   else
-//   {
-//     Serial.print(F("INVALID"));
-//   }
-
-//   Serial.print(F("  Date/Time: "));
-//   if (gps.date.isValid())
-//   {
-//     Serial.print(gps.date.month());
-//     Serial.print(F("/"));
-//     Serial.print(gps.date.day());
-//     Serial.print(F("/"));
-//     Serial.print(gps.date.year());
-//   }
-//   else
-//   {
-//     Serial.print(F("INVALID"));
-//   }
-
-//   Serial.print(F(" "));
-//   if (gps.time.isValid())
-//   {
-//     if (gps.time.hour() < 10) Serial.print(F("0"));
-//     Serial.print(gps.time.hour());
-//     Serial.print(F(":"));
-//     if (gps.time.minute() < 10) Serial.print(F("0"));
-//     Serial.print(gps.time.minute());
-//     Serial.print(F(":"));
-//     if (gps.time.second() < 10) Serial.print(F("0"));
-//     Serial.print(gps.time.second());
-//     Serial.print(F("."));
-//     if (gps.time.centisecond() < 10) Serial.print(F("0"));
-//     Serial.print(gps.time.centisecond());
-//   }
-//   else
-//   {
-//     Serial.print(F("INVALID"));
-//   }
-
-//   Serial.println();
-// }
-
-// void retrieveLocation() {
-//   // This sketch displays information every time a new sentence is correctly encoded.
-//   while (ss.available() > 0) {
-//     if (gps.encode(ss.read()))
-//       displayInfo();
-//   }
-
-//   if (millis() > 5000 && gps.charsProcessed() < 10)
-//   {
-//     Serial.println(F("No GPS detected: check wiring."));
-//     while(true);
-//   }
-// }
-
 void loop()
 {
-  // retrieveLocation();
   captureImage();
+
+  // Get the GPS data (automatically updates)
+  GPSData gps_data = gps.get_data();
+
+  // Print the GPS data
+  Serial.print("Fix: ");
+  Serial.print(gps_data.has_fix ? "Yes" : "No");
+
+  Serial.print(", Latitude: ");
+  Serial.print(gps_data.latitude, 6);
+
+  Serial.print(", Longitude: ");
+  Serial.print(gps_data.longitude, 6);
+
+  // Additional data
+  Serial.print(", Satellites: ");
+  Serial.print(gps_data.satellites);
+
+  Serial.print(", Time: ");
+  Serial.print(gps_data.time);
+
+  Serial.print(", Date: ");
+  Serial.println(gps_data.date);
 
   Serial.println(F("------------------------------"));
   Serial.print(F("Temp: "));
