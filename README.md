@@ -1,26 +1,33 @@
 # Weather Balloon
 
-Arduino Uno payload for a high-altitude balloon launch.
+Arduino Uno R4 Minima payload for a high-altitude balloon launch.
 
 ## Hardware
 
 | Component | Pin |
 |---|---|
-| Red LED | 9 (PWM) |
+| Built-in LED (GPS indicator) | LED_BUILTIN |
 | Arducam Mega (CS) | 7 |
-| SD Card module (CS) | 10 |
+| SD Card module (CS) | 9 |
+
+| SPI | Pin | Color |
+|---|---|---|
+| MOSI | 11 | Yellow |
+| MISO | 12 | Red |
+| SCK | 13 | White |
+| SCL | - | Green |
+| SDA | - | Purple |
 
 ## What it does
 
-On boot, initialises serial, SD card, and camera. Then loops every 10 seconds:
-takes a FHD JPEG photo, writes it to the SD card, and turns the LED off.
-The LED blinks at 300ms intervals during capture to indicate activity.
+On boot, initialises serial, SD card, camera, and BME280 atmospheric sensor. Then loops every 5 seconds:
+takes a FHD JPEG photo, writes it to the SD card, and prints temperature, humidity, and pressure over serial.
 
 Images are saved as `<elapsed_ms>.jpg` (milliseconds since boot).
 
 ## Build & flash
 
-Uses [PlatformIO](https://platformio.org/) targeting Arduino Uno (ATmega328P).
+Uses [PlatformIO](https://platformio.org/) targeting Arduino Uno R4 Minima (Renesas RA4M1).
 
 ```bash
 pio run              # build
@@ -31,5 +38,6 @@ pio device monitor   # serial output at 9600 baud
 ## Dependencies
 
 - [Arducam_Mega](https://github.com/ArduCAM/Arducam_Mega)
-- [ezLED](https://github.com/ArduinoGetStarted/ezLED)
+- [Adafruit BME280 Library](https://github.com/adafruit/Adafruit_BME280_Library)
+- [TinyGPSPlus](https://github.com/mikalhart/TinyGPSPlus) *(included but GPS currently disabled)*
 - SD (built-in Arduino library)
