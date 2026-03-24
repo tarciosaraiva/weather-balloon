@@ -1,21 +1,28 @@
-#include <Arducam_Mega.h>
 #include <Arduino.h>
-#include <ezLED.h>
 #include <SD.h>
+#include <Arducam_Mega.h>
+#include <Adafruit_BME280.h>
+// #include <SoftwareSerial.h>
+// #include <TinyGPS++.h>
 
 // constants
 constexpr int CAM_BUFFER_SIZE = 255;
-constexpr int CAMERA_PIN      = 7;
-constexpr int RED_LED_PIN     = 9;
-constexpr int SD_CARD_PIN     = 10;
+constexpr int GPS_TX_PIN = 2;
+constexpr int GPS_RX_PIN = 3;
+constexpr int CAMERA_PIN = 7;
+constexpr int SD_CARD_PIN = 9;
+constexpr int BME_AWS_ADDR = 0x77;
+// constexpr int GPS_LED = LED_BUILTIN;
 
 // globals
-unsigned long start        = 0;
+unsigned long start = 0;
 unsigned long captureStart = 0;
 
-ezLED        led(RED_LED_PIN);
+Adafruit_BME280 bme;
 Arducam_Mega myCAM(CAMERA_PIN);
-File         outFile;
+File outFile;
+// TinyGPSPlus gps;
+// SoftwareSerial ss(GPS_RX_PIN, GPS_TX_PIN);
 
 void openImageFile()
 {
@@ -25,24 +32,23 @@ void openImageFile()
   if (!outFile)
   {
     Serial.println(F("Could not open file."));
-    while (1);
+    while (1)
+      ;
   }
 }
 
 void saveImage()
 {
-  uint8_t  buffer[CAM_BUFFER_SIZE] = {0};
-  uint32_t remaining               = myCAM.getReceivedLength();
+  uint8_t buffer[CAM_BUFFER_SIZE] = {0};
+  uint32_t remaining = myCAM.getReceivedLength();
   while (remaining > 0)
   {
-    led.loop();
     uint8_t toRead = remaining > CAM_BUFFER_SIZE ? CAM_BUFFER_SIZE : (uint8_t)remaining;
     myCAM.readBuff(buffer, toRead);
     outFile.write(buffer, toRead);
     remaining -= toRead;
   }
   outFile.close();
-  led.turnOFF();
   Serial.print(F("... and finished. Took: "));
   Serial.print(millis() - captureStart);
   Serial.println(F("ms."));
@@ -51,23 +57,24 @@ void saveImage()
 void captureImage()
 {
   captureStart = millis();
-
-  led.turnON();
-  led.blink(50, 50);
-
-  openImageFile();
   Serial.print(F("Image capture started..."));
-  myCAM.takePicture(CAM_IMAGE_MODE_FHD, CAM_IMAGE_PIX_FMT_JPG);
+  openImageFile();
+  myCAM.takePicture(CAM_IMAGE_MODE_WQXGA2, CAM_IMAGE_PIX_FMT_JPG);
   saveImage();
 }
 
 void setupSerial()
 {
   Serial.begin(9600);
+  while(!Serial);
+  Serial.println(F("Serial ready."));
 }
 
 void setupSD()
 {
+  pinMode(SD_CARD_PIN, OUTPUT);
+  digitalWrite(SD_CARD_PIN, HIGH);
+
   while (!SD.begin(SD_CARD_PIN))
   {
     Serial.println(F("SD Card could not be initialised."));
@@ -82,6 +89,19 @@ void setupCamera()
   Serial.println(F("Camera ready."));
 }
 
+void setupBME280()
+{
+  if (!bme.begin(BME_AWS_ADDR))
+  {
+    Serial.println("Could not find BME280!");
+    while (1);
+  }
+  else
+  {
+    Serial.println(F("Atmospheric sensor ready."));
+  }
+}
+
 void setup()
 {
   start = millis();
@@ -92,11 +112,87 @@ void setup()
   setupSerial();
   setupSD();
   setupCamera();
+  setupBME280();
 }
+
+// void displayInfo()
+// {
+//   Serial.print(F("Location: "));
+//   if (gps.location.isValid())
+//   {
+//     Serial.print(gps.location.lat(), 6);
+//     Serial.print(F(","));
+//     Serial.print(gps.location.lng(), 6);
+//   }
+//   else
+//   {
+//     Serial.print(F("INVALID"));
+//   }
+
+//   Serial.print(F("  Date/Time: "));
+//   if (gps.date.isValid())
+//   {
+//     Serial.print(gps.date.month());
+//     Serial.print(F("/"));
+//     Serial.print(gps.date.day());
+//     Serial.print(F("/"));
+//     Serial.print(gps.date.year());
+//   }
+//   else
+//   {
+//     Serial.print(F("INVALID"));
+//   }
+
+//   Serial.print(F(" "));
+//   if (gps.time.isValid())
+//   {
+//     if (gps.time.hour() < 10) Serial.print(F("0"));
+//     Serial.print(gps.time.hour());
+//     Serial.print(F(":"));
+//     if (gps.time.minute() < 10) Serial.print(F("0"));
+//     Serial.print(gps.time.minute());
+//     Serial.print(F(":"));
+//     if (gps.time.second() < 10) Serial.print(F("0"));
+//     Serial.print(gps.time.second());
+//     Serial.print(F("."));
+//     if (gps.time.centisecond() < 10) Serial.print(F("0"));
+//     Serial.print(gps.time.centisecond());
+//   }
+//   else
+//   {
+//     Serial.print(F("INVALID"));
+//   }
+
+//   Serial.println();
+// }
+
+// void retrieveLocation() {
+//   // This sketch displays information every time a new sentence is correctly encoded.
+//   while (ss.available() > 0) {
+//     if (gps.encode(ss.read()))
+//       displayInfo();
+//   }
+
+//   if (millis() > 5000 && gps.charsProcessed() < 10)
+//   {
+//     Serial.println(F("No GPS detected: check wiring."));
+//     while(true);
+//   }
+// }
 
 void loop()
 {
-  led.loop();
+  // retrieveLocation();
   captureImage();
+
+  Serial.println(F("------------------------------"));
+  Serial.print(F("Temp: "));
+  Serial.println(bme.readTemperature());
+  Serial.print(F("Humidity: "));
+  Serial.println(bme.readHumidity());
+  Serial.print(F("Pressure: "));
+  Serial.println(bme.readPressure() / 100.0F);
+  Serial.println(F("------------------------------"));
+
   delay(10000);
 }
