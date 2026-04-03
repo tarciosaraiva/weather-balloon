@@ -26,7 +26,6 @@ SdFat32 sd;
 #define SD_CONFIG SdSpiConfig(SDCARD_CS, DEDICATED_SPI, SD_SCK_MHZ(0), &softSpi)
 
 // globals
-unsigned long start = 0;
 unsigned long captureStart = 0;
 
 Adafruit_BME280 bme;
@@ -203,8 +202,6 @@ void transmitData(const String &msg)
 
 void setup()
 {
-  start = millis();
-
   setupSerial();
 
   setPin(CAMERA_CS);
