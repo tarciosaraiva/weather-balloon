@@ -1,4 +1,5 @@
 #include <Adafruit_BME280.h>
+#include <TimeLib.h>
 #include <Arducam_Mega.h>
 #include <Arduino.h>
 #include <GPSParser.h>
@@ -33,53 +34,28 @@ Arducam_Mega* myCAM = nullptr;
 File32 outFile;
 GPSReader gps(Serial1);
 
-uint32_t toEpoch(const GPSData &gps_data)
+time_t toEpoch(const GPSData &gps_data)
 {
   if (gps_data.time.length() < 8 || gps_data.date.length() < 10)
     return 0;
 
-  int hour   = gps_data.time.substring(0, 2).toInt();
-  int minute = gps_data.time.substring(3, 5).toInt();
-  int second = gps_data.time.substring(6, 8).toInt();
-  int day    = gps_data.date.substring(0, 2).toInt();
-  int month  = gps_data.date.substring(3, 5).toInt();
-  int year   = gps_data.date.substring(6, 10).toInt();
-
-  if (year < 1970) return 0;
-
-  int days_in_month[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-  if (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0))
-    days_in_month[1] = 29;
-
-  uint32_t days = 0;
-  for (int y = 1970; y < year; y++)
-    days += (y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)) ? 366 : 365;
-  for (int m = 1; m < month; m++)
-    days += days_in_month[m - 1];
-  days += day - 1;
-
-  return days * 86400UL + (uint32_t)hour * 3600UL + (uint32_t)minute * 60UL + second;
+  tmElements_t tm;
+  tm.Hour   = gps_data.time.substring(0, 2).toInt();
+  tm.Minute = gps_data.time.substring(3, 5).toInt();
+  tm.Second = gps_data.time.substring(6, 8).toInt();
+  tm.Day    = gps_data.date.substring(0, 2).toInt();
+  tm.Month  = gps_data.date.substring(3, 5).toInt();
+  tm.Year   = gps_data.date.substring(6, 10).toInt() - 1970;
+  return makeTime(tm);
 }
 
 void buildFilename(const GPSData &gps_data, char *name)
 {
-  // Parse "HH:MM:SS.xx" and add 10 hours for AEST (UTC+10)
-  int hour   = gps_data.time.substring(0, 2).toInt() + 10;
-  int minute = gps_data.time.substring(3, 5).toInt();
-  int second = gps_data.time.substring(6, 8).toInt();
-
-  // Parse "DD/MM/YYYY"
-  int day   = gps_data.date.substring(0, 2).toInt();
-  int month = gps_data.date.substring(3, 5).toInt();
-  int year  = gps_data.date.substring(6, 10).toInt();
-
-  if (hour >= 24)
-  {
-    hour -= 24;
-    day  += 1;
-  }
-
-  sprintf(name, "pictures/%04d%02d%02d_%02d%02d%02d.jpg", year, month, day, hour, minute, second);
+  time_t t = toEpoch(gps_data) + (10UL * 3600UL);
+  tmElements_t tm;
+  breakTime(t, tm);
+  sprintf(name, "pictures/%04d%02d%02d_%02d%02d%02d.jpg",
+    tm.Year + 1970, tm.Month, tm.Day, tm.Hour, tm.Minute, tm.Second);
 }
 
 void openImageFile(const GPSData &gps_data)
@@ -208,7 +184,7 @@ void setupLoRa()
 String buildTelemetryMessage(const GPSData &gps_data)
 {
   String msg = "TS:";
-  msg += toEpoch(gps_data);
+  msg += (uint32_t)toEpoch(gps_data);
   msg += ",LAT:" + String(gps_data.latitude, 6);
   msg += ",LON:" + String(gps_data.longitude, 6);
   msg += ",ALT:" + String(gps_data.altitude, 2);
