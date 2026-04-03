@@ -40,7 +40,7 @@ Arduino Uno R4 Minima payload for a high-altitude balloon launch.
 
 On boot, initialises serial (USB + Serial1 for GPS), SD card, camera, and BME280 atmospheric sensor. LoRa initialisation (`setupLoRa()`) and transmission (`transmitData()`) are currently commented out. Then loops every 10 seconds: takes a FHD JPEG photo (1920x1080, ~5 seconds capture), writes it to the SD card, prints GPS fix status, coordinates, satellite count, time and date, and prints temperature, humidity, and pressure over serial.
 
-Images are saved as `<elapsed_ms>.jpg` (milliseconds since boot).
+Images are saved under `pictures/` as `YYYYMMDD_HHMMSS.jpg`, where the timestamp is GPS UTC time converted to AEST (UTC+10).
 
 ## LoRa transmission
 
@@ -66,4 +66,5 @@ pio device monitor   # serial output at 9600 baud
 - [Adafruit BME280 Library](https://github.com/adafruit/Adafruit_BME280_Library)
 - [LoRa](https://github.com/sandeepmistry/arduino-LoRa)
 - [SdFat by greiman](https://github.com/greiman/SdFat) (^2.3.0)
+- [paulstoffregen/Time](https://github.com/PaulStoffregen/Time) (^1.6.1)
 - GPSParser (local library — `lib/GPSParser/`)

@@ -36,10 +36,12 @@ Single-file Arduino sketch (`src/main.cpp`) targeting Arduino Uno R4 Minima (Ren
 **Key functions:**
 - `captureImage()` — opens file, triggers `takePicture`, calls `saveImage`
 - `saveImage()` — drains camera FIFO via `readBuff` in 255-byte chunks, writes to SD
-- `openImageFile()` — generates filename from `millis() - start`, opens file for write
+- `openImageFile()` — calls `buildFilename()` to derive the filename from GPS time, opens file for write
 - `setupSerial()` — initialises `Serial` (USB, 9600) and `Serial1` (GPS, 9600)
 - `setupSD()` / `setupCamera()` / `setupBME280()` / `setupLoRa()` — single-responsibility helpers
 - `transmitData()` — transmits GPS (lat, lon, alt) and BME280 (temp, humidity, pressure) as CSV over LoRa at 915 MHz
+- `toEpoch(gps_data)` — converts GPS date/time strings to `time_t` using `tmElements_t` + `makeTime()` from TimeLib. Returns `0` if either string is too short.
+- `buildFilename(gps_data, name)` — adds a 10-hour AEST offset to the `time_t` from `toEpoch()`, then calls `breakTime()` to decompose the result, ensuring correct month/year rollover. Writes `pictures/YYYYMMDD_HHMMSS.jpg` into `name`.
 
 ## Camera
 
@@ -60,3 +62,4 @@ Single-file Arduino sketch (`src/main.cpp`) targeting Arduino Uno R4 Minima (Ren
 - `readBuff` max transfer size is 255 bytes (hardware SPI limit)
 - Camera uses hardware SPI (pins 11/12/13); SD card uses software SPI (pins 5/6/8) via SdFat's `SoftSpiDriver`. This is necessary because the Arducam Mega does not tristate MISO when its CS is HIGH, which would corrupt SD reads on a shared hardware SPI bus. The `SPI_DRIVER_SELECT=2` build flag in `platformio.ini` enables `SoftSpiDriver` in SdFat.
 - GPS uses the local `GPSParser` library (`lib/GPSParser/`); reads `$GPRMC`, `$GPGGA`, `$GPGSA` sentences from Serial1
+- On Renesas RA4M1, `time_t` is `long long int`. `buildTelemetryMessage()` casts the result of `toEpoch()` to `uint32_t` before appending to an Arduino `String` to resolve the ambiguous overload.
