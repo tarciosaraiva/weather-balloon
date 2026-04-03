@@ -13,24 +13,38 @@ Arduino Uno R4 Minima payload for a high-altitude balloon launch.
 | LoRa Shield XC4392 (RESET) | 9 |
 | LoRa Shield XC4392 (DIO0) | 2 |
 
-| SPI | Pin | Color |
+**Hardware SPI** (camera — Arducam Mega)
+
+| Signal | Pin | Color |
 |---|---|---|
 | MOSI | 11 | Yellow |
 | MISO | 12 | Red |
 | SCK | 13 | White |
+
+**Software SPI** (SD card — SdFat SoftSpiDriver)
+
+| Signal | Pin | Color |
+|---|---|---|
+| MOSI | 5 | Yellow |
+| MISO | 6 | Red |
+| SCK | 8 | White |
+
+**I2C** (BME280 atmospheric sensor)
+
+| Signal | Pin | Color |
+|---|---|---|
 | SCL | SCL | Green |
 | SDA | SDA | Purple |
 
 ## What it does
 
-On boot, initialises serial (USB + Serial1 for GPS), SD card, camera, BME280 atmospheric sensor, and LoRa radio. Then loops every 10 seconds:
-takes a FHD JPEG photo, writes it to the SD card, prints GPS fix status, coordinates, satellite count, time and date, prints temperature, humidity, and pressure over serial, then transmits GPS and atmospheric data via LoRa.
+On boot, initialises serial (USB + Serial1 for GPS), SD card, camera, and BME280 atmospheric sensor. LoRa initialisation (`setupLoRa()`) and transmission (`transmitData()`) are currently commented out. Then loops every 10 seconds: takes a FHD JPEG photo (1920x1080, ~5 seconds capture), writes it to the SD card, prints GPS fix status, coordinates, satellite count, time and date, and prints temperature, humidity, and pressure over serial.
 
 Images are saved as `<elapsed_ms>.jpg` (milliseconds since boot).
 
 ## LoRa transmission
 
-Transmits at 915 MHz (Australia) using a Duinotech XC4392 (SX1276) shield in transmitter mode. Packet format:
+Transmits at 915 MHz (Australia) using a Duinotech XC4392 (SX1276) shield in transmitter mode. `setupLoRa()` and `transmitData()` are currently commented out. Packet format when enabled:
 
 ```
 LAT:<v>,LON:<v>,ALT:<v>,TMP:<v>,HUM:<v>,PRS:<v>
@@ -51,5 +65,5 @@ pio device monitor   # serial output at 9600 baud
 - [Arducam_Mega](https://github.com/ArduCAM/Arducam_Mega)
 - [Adafruit BME280 Library](https://github.com/adafruit/Adafruit_BME280_Library)
 - [LoRa](https://github.com/sandeepmistry/arduino-LoRa)
+- [SdFat by greiman](https://github.com/greiman/SdFat) (^2.3.0)
 - GPSParser (local library — `lib/GPSParser/`)
-- SD (built-in Arduino library)

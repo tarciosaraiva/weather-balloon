@@ -3,32 +3,41 @@
 #include <Arduino.h>
 #include <GPSParser.h>
 #include <LoRa.h>
-#include <SD.h>
+#include <SdFat.h>
+#include <SdCard/SdSpiCard/SpiDriver/SdSpiSoftDriver.h>
 
 // constants
 constexpr int CAM_BUFFER_SIZE = 255;
-constexpr int CAMERA_PIN = 5;
-constexpr int SD_CARD_PIN = 4;
+constexpr int CAMERA_CS = 7;
+constexpr int SDCARD_CS = 4;
+constexpr int SD_MOSI_PIN = 5;
+constexpr int SD_MISO_PIN = 6;
+constexpr int SD_SCK_PIN = 8;
+
 constexpr int BME_AWS_ADDR = 0x77;
 constexpr int LORA_SS_PIN = 10;
 constexpr int LORA_RESET_PIN = 9;
 constexpr int LORA_DIO0_PIN = 2;
 constexpr long LORA_FREQ = 915E6;
 
+SoftSpiDriver<SD_MISO_PIN, SD_MOSI_PIN, SD_SCK_PIN> softSpi;
+SdFat32 sd;
+#define SD_CONFIG SdSpiConfig(SDCARD_CS, DEDICATED_SPI, SD_SCK_MHZ(0), &softSpi)
+
 // globals
 unsigned long start = 0;
 unsigned long captureStart = 0;
 
 Adafruit_BME280 bme;
-Arducam_Mega myCAM(CAMERA_PIN);
-File outFile;
+Arducam_Mega* myCAM = nullptr;
+File32 outFile;
 GPSReader gps(Serial1);
 
 void openImageFile()
 {
   char name[16] = {0};
   sprintf(name, "%lu.jpg", millis() - start);
-  outFile = SD.open(name, FILE_WRITE);
+  outFile = sd.open(name, O_WRONLY | O_CREAT | O_TRUNC);
   if (!outFile)
   {
     Serial.println(F("Could not open file."));
@@ -40,11 +49,11 @@ void openImageFile()
 void saveImage()
 {
   uint8_t buffer[CAM_BUFFER_SIZE] = {0};
-  uint32_t remaining = myCAM.getReceivedLength();
+  uint32_t remaining = myCAM->getReceivedLength();
   while (remaining > 0)
   {
     uint8_t toRead = remaining > CAM_BUFFER_SIZE ? CAM_BUFFER_SIZE : (uint8_t)remaining;
-    myCAM.readBuff(buffer, toRead);
+    myCAM->readBuff(buffer, toRead);
     outFile.write(buffer, toRead);
     remaining -= toRead;
   }
@@ -59,8 +68,14 @@ void captureImage()
   captureStart = millis();
   Serial.print(F("Image capture started..."));
   openImageFile();
-  myCAM.takePicture(CAM_IMAGE_MODE_WQXGA2, CAM_IMAGE_PIX_FMT_JPG);
+  myCAM->takePicture(CAM_IMAGE_MODE_FHD, CAM_IMAGE_PIX_FMT_JPG);
   saveImage();
+}
+
+void setPin(int pin)
+{
+  pinMode(pin, OUTPUT);
+  digitalWrite(pin, HIGH);
 }
 
 void setupSerial()
@@ -74,9 +89,9 @@ void setupSerial()
 
 void setupSD()
 {
-  while (!SD.begin(SD_CARD_PIN))
+  while (!sd.begin(SD_CONFIG))
   {
-    Serial.println(F("SD Card could not be initialised."));
+    Serial.println(F("SD init failed."));
     delay(1000);
   }
   Serial.println(F("SD Card ready."));
@@ -84,7 +99,7 @@ void setupSD()
 
 void setupCamera()
 {
-  while (!myCAM.begin())
+  while (myCAM->begin() != CAM_ERR_SUCCESS)
   {
     Serial.println(F("Camera could not be initialised."));
     delay(1000);
@@ -114,11 +129,17 @@ void setupLoRa()
     Serial.println(F("LoRa init failed, retrying..."));
     delay(1000);
   }
+
+  // LoRa.setTxPower(20);
+  // LoRa.setSpreadingFactor(11);
+  // LoRa.setSignalBandwidth(250E3);
+
   Serial.println(F("LoRa ready."));
 }
 
 void transmitData(const GPSData &gps_data)
 {
+  Serial.println(F("transmiting data"));
   LoRa.beginPacket();
   LoRa.print("LAT:");
   LoRa.print(gps_data.latitude, 6);
@@ -135,26 +156,22 @@ void transmitData(const GPSData &gps_data)
   LoRa.endPacket();
 }
 
-void setPin(int pin)
-{
-  pinMode(pin, OUTPUT);
-  digitalWrite(pin, HIGH);
-}
-
 void setup()
 {
   start = millis();
 
   setupSerial();
 
-  setPin(CAMERA_PIN);
-  setPin(SD_CARD_PIN);
-  setPin(LORA_SS_PIN);
-  delay(100);
+  setPin(CAMERA_CS);
+  setPin(SDCARD_CS);
+  // setPin(LORA_SS_PIN);
 
+  // setupLoRa();
   setupSD();
+
+  myCAM = new Arducam_Mega(CAMERA_CS);
+  delay(200);
   setupCamera();
-  setupLoRa();
   setupBME280();
 }
 
@@ -175,7 +192,7 @@ void loop()
   Serial.print(", Longitude: ");
   Serial.print(gps_data.longitude, 6);
 
-  Serial.print(", Longitude: ");
+  Serial.print(", Altitude: ");
   Serial.print(gps_data.altitude, 6);
 
   // Additional data
@@ -197,7 +214,7 @@ void loop()
   Serial.println(bme.readPressure() / 100.0F);
   Serial.println(F("------------------------------"));
 
-  transmitData(gps_data);
+  // transmitData(gps_data);
 
   delay(10000);
 }
