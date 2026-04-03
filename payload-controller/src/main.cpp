@@ -33,10 +33,31 @@ Arducam_Mega* myCAM = nullptr;
 File32 outFile;
 GPSReader gps(Serial1);
 
-void openImageFile()
+void buildFilename(const GPSData &gps_data, char *name)
 {
-  char name[16] = {0};
-  sprintf(name, "%lu.jpg", millis() - start);
+  // Parse "HH:MM:SS.xx" and add 10 hours for AEST (UTC+10)
+  int hour   = gps_data.time.substring(0, 2).toInt() + 10;
+  int minute = gps_data.time.substring(3, 5).toInt();
+  int second = gps_data.time.substring(6, 8).toInt();
+
+  // Parse "DD/MM/YYYY"
+  int day   = gps_data.date.substring(0, 2).toInt();
+  int month = gps_data.date.substring(3, 5).toInt();
+  int year  = gps_data.date.substring(6, 10).toInt();
+
+  if (hour >= 24)
+  {
+    hour -= 24;
+    day  += 1;
+  }
+
+  sprintf(name, "%04d%02d%02d_%02d%02d%02d.jpg", year, month, day, hour, minute, second);
+}
+
+void openImageFile(const GPSData &gps_data)
+{
+  char name[20] = {0};
+  buildFilename(gps_data, name);
   outFile = sd.open(name, O_WRONLY | O_CREAT | O_TRUNC);
   if (!outFile)
   {
@@ -63,11 +84,11 @@ void saveImage()
   Serial.println(F("ms."));
 }
 
-void captureImage()
+void captureImage(const GPSData &gps_data)
 {
   captureStart = millis();
   Serial.print(F("Image capture started..."));
-  openImageFile();
+  openImageFile(gps_data);
   myCAM->takePicture(CAM_IMAGE_MODE_FHD, CAM_IMAGE_PIX_FMT_JPG);
   saveImage();
 }
@@ -177,32 +198,21 @@ void setup()
 
 void loop()
 {
-  captureImage();
-
-  // Get the GPS data (automatically updates)
   GPSData gps_data = gps.get_data();
 
-  // Print the GPS data
-  Serial.print("Fix: ");
+  Serial.print(F("Fix: "));
   Serial.print(gps_data.has_fix ? "Yes" : "No");
-
-  Serial.print(", Latitude: ");
+  Serial.print(F(", Latitude: "));
   Serial.print(gps_data.latitude, 6);
-
-  Serial.print(", Longitude: ");
+  Serial.print(F(", Longitude: "));
   Serial.print(gps_data.longitude, 6);
-
-  Serial.print(", Altitude: ");
+  Serial.print(F(", Altitude: "));
   Serial.print(gps_data.altitude, 6);
-
-  // Additional data
-  Serial.print(", Satellites: ");
+  Serial.print(F(", Satellites: "));
   Serial.print(gps_data.satellites);
-
-  Serial.print(", Time: ");
+  Serial.print(F(", Time: "));
   Serial.print(gps_data.time);
-
-  Serial.print(", Date: ");
+  Serial.print(F(", Date: "));
   Serial.println(gps_data.date);
 
   Serial.println(F("------------------------------"));
@@ -213,6 +223,11 @@ void loop()
   Serial.print(F("Pressure: "));
   Serial.println(bme.readPressure() / 100.0F);
   Serial.println(F("------------------------------"));
+
+  if (gps_data.has_fix)
+  {
+    captureImage(gps_data);
+  }
 
   // transmitData(gps_data);
 
