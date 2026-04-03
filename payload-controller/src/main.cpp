@@ -33,6 +33,34 @@ Arducam_Mega* myCAM = nullptr;
 File32 outFile;
 GPSReader gps(Serial1);
 
+uint32_t toEpoch(const GPSData &gps_data)
+{
+  if (gps_data.time.length() < 8 || gps_data.date.length() < 10)
+    return 0;
+
+  int hour   = gps_data.time.substring(0, 2).toInt();
+  int minute = gps_data.time.substring(3, 5).toInt();
+  int second = gps_data.time.substring(6, 8).toInt();
+  int day    = gps_data.date.substring(0, 2).toInt();
+  int month  = gps_data.date.substring(3, 5).toInt();
+  int year   = gps_data.date.substring(6, 10).toInt();
+
+  if (year < 1970) return 0;
+
+  int days_in_month[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  if (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0))
+    days_in_month[1] = 29;
+
+  uint32_t days = 0;
+  for (int y = 1970; y < year; y++)
+    days += (y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)) ? 366 : 365;
+  for (int m = 1; m < month; m++)
+    days += days_in_month[m - 1];
+  days += day - 1;
+
+  return days * 86400UL + (uint32_t)hour * 3600UL + (uint32_t)minute * 60UL + second;
+}
+
 void buildFilename(const GPSData &gps_data, char *name)
 {
   // Parse "HH:MM:SS.xx" and add 10 hours for AEST (UTC+10)
@@ -51,12 +79,12 @@ void buildFilename(const GPSData &gps_data, char *name)
     day  += 1;
   }
 
-  sprintf(name, "%04d%02d%02d_%02d%02d%02d.jpg", year, month, day, hour, minute, second);
+  sprintf(name, "pictures/%04d%02d%02d_%02d%02d%02d.jpg", year, month, day, hour, minute, second);
 }
 
 void openImageFile(const GPSData &gps_data)
 {
-  char name[20] = {0};
+  char name[29] = {0};
   buildFilename(gps_data, name);
   outFile = sd.open(name, O_WRONLY | O_CREAT | O_TRUNC);
   if (!outFile)
@@ -65,6 +93,18 @@ void openImageFile(const GPSData &gps_data)
     while (1)
       ;
   }
+}
+
+void logTelemetry(const String &msg)
+{
+  File32 logFile = sd.open("telemetry/datalogger.txt", O_WRONLY | O_CREAT | O_APPEND);
+  if (!logFile)
+  {
+    Serial.println(F("Could not open telemetry file."));
+    return;
+  }
+  logFile.println(msg);
+  logFile.close();
 }
 
 void saveImage()
@@ -108,6 +148,12 @@ void setupSerial()
   Serial.println(F("Serial ready."));
 }
 
+void setupDirectories()
+{
+  sd.mkdir("pictures");
+  sd.mkdir("telemetry");
+}
+
 void setupSD()
 {
   while (!sd.begin(SD_CONFIG))
@@ -115,6 +161,7 @@ void setupSD()
     Serial.println(F("SD init failed."));
     delay(1000);
   }
+  setupDirectories();
   Serial.println(F("SD Card ready."));
 }
 
@@ -158,22 +205,23 @@ void setupLoRa()
   Serial.println(F("LoRa ready."));
 }
 
-void transmitData(const GPSData &gps_data)
+String buildTelemetryMessage(const GPSData &gps_data)
 {
-  Serial.println(F("transmiting data"));
+  String msg = "TS:";
+  msg += toEpoch(gps_data);
+  msg += ",LAT:" + String(gps_data.latitude, 6);
+  msg += ",LON:" + String(gps_data.longitude, 6);
+  msg += ",ALT:" + String(gps_data.altitude, 2);
+  msg += ",TMP:" + String(bme.readTemperature());
+  msg += ",HUM:" + String(bme.readHumidity());
+  msg += ",PRS:" + String(bme.readPressure() / 100.0F);
+  return msg;
+}
+
+void transmitData(const String &msg)
+{
   LoRa.beginPacket();
-  LoRa.print("LAT:");
-  LoRa.print(gps_data.latitude, 6);
-  LoRa.print(",LON:");
-  LoRa.print(gps_data.longitude, 6);
-  LoRa.print(",ALT:");
-  LoRa.print(gps_data.altitude, 2);
-  LoRa.print(",TMP:");
-  LoRa.print(bme.readTemperature());
-  LoRa.print(",HUM:");
-  LoRa.print(bme.readHumidity());
-  LoRa.print(",PRS:");
-  LoRa.print(bme.readPressure() / 100.0F);
+  LoRa.print(msg);
   LoRa.endPacket();
 }
 
@@ -200,36 +248,39 @@ void loop()
 {
   GPSData gps_data = gps.get_data();
 
-  Serial.print(F("Fix: "));
-  Serial.print(gps_data.has_fix ? "Yes" : "No");
-  Serial.print(F(", Latitude: "));
-  Serial.print(gps_data.latitude, 6);
-  Serial.print(F(", Longitude: "));
-  Serial.print(gps_data.longitude, 6);
-  Serial.print(F(", Altitude: "));
-  Serial.print(gps_data.altitude, 6);
-  Serial.print(F(", Satellites: "));
-  Serial.print(gps_data.satellites);
-  Serial.print(F(", Time: "));
-  Serial.print(gps_data.time);
-  Serial.print(F(", Date: "));
-  Serial.println(gps_data.date);
+  // Serial.print(F("Fix: "));
+  // Serial.print(gps_data.has_fix ? "Yes" : "No");
+  // Serial.print(F(", Latitude: "));
+  // Serial.print(gps_data.latitude, 6);
+  // Serial.print(F(", Longitude: "));
+  // Serial.print(gps_data.longitude, 6);
+  // Serial.print(F(", Altitude: "));
+  // Serial.print(gps_data.altitude, 6);
+  // Serial.print(F(", Satellites: "));
+  // Serial.print(gps_data.satellites);
+  // Serial.print(F(", Time: "));
+  // Serial.print(gps_data.time);
+  // Serial.print(F(", Date: "));
+  // Serial.println(gps_data.date);
 
-  Serial.println(F("------------------------------"));
-  Serial.print(F("Temp: "));
-  Serial.println(bme.readTemperature());
-  Serial.print(F("Humidity: "));
-  Serial.println(bme.readHumidity());
-  Serial.print(F("Pressure: "));
-  Serial.println(bme.readPressure() / 100.0F);
-  Serial.println(F("------------------------------"));
+  // Serial.println(F("------------------------------"));
+  // Serial.print(F("Temp: "));
+  // Serial.println(bme.readTemperature());
+  // Serial.print(F("Humidity: "));
+  // Serial.println(bme.readHumidity());
+  // Serial.print(F("Pressure: "));
+  // Serial.println(bme.readPressure() / 100.0F);
+  // Serial.println(F("------------------------------"));
+
+  String telemetry = buildTelemetryMessage(gps_data);
+  logTelemetry(telemetry);
 
   if (gps_data.has_fix)
   {
     captureImage(gps_data);
   }
 
-  // transmitData(gps_data);
+  // transmitData(telemetry);
 
   delay(10000);
 }
