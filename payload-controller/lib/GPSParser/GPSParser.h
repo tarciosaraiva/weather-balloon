@@ -6,7 +6,6 @@
 #define GPSParser_h
 
 #include <Arduino.h>
-#include <SoftwareSerial.h>
 
 class GPSData {
   public:
