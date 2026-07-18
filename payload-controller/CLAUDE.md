@@ -13,53 +13,51 @@ pio run -t clean         # clean build artifacts
 
 ## Architecture
 
-Single-file Arduino sketch (`src/main.cpp`) targeting Arduino Uno R4 Minima (Renesas RA4M1) via PlatformIO.
+Single-file Arduino sketch (`src/main.cpp`) targeting Arduino MKR WAN 1310 (SAMD21) via PlatformIO.
 
 **Pin assignments:**
-- `CAMERA_PIN 7` — Arducam Mega chip select
-- `SD_CARD_PIN 4` — SD card chip select
-- `LORA_SS_PIN 10` — LoRa shield chip select
-- `LORA_RESET_PIN 9` — LoRa shield reset
-- `LORA_DIO0_PIN 2` — LoRa shield DIO0
+- `CAMERA_CS 6` — Arducam Mega chip select
+- `SDCARD_CS 4` — SD card chip select
+- LoRa is the onboard module, wired internally on a dedicated SPI1 bus; no CS/RESET/DIO0 pins to assign
 - `Serial1` (pins 0/1) — hardware UART connected to U-blox NEO-6M GPS (9600 baud, RX only)
-
-**Software SPI pins for SD card (SdFat SoftSpiDriver):**
-- MOSI: pin 5
-- MISO: pin 6
-- SCK: pin 8
-- CS: pin 4 (`SDCARD_CS`)
+- Camera and SD card share the board's main hardware SPI bus (distinct CS pins) — see shared-bus caveat below
 
 **Execution flow:**
-- `setup()` — in order: set all CS pins HIGH, `setupSD()`, construct `Arducam_Mega` on the heap (stored as `myCAM` pointer), 200 ms delay, `setupCamera()`, `setupBME280()`. `setupLoRa()` is currently commented out.
-- `loop()` — calls `captureImage()`, prints GPS data, prints BME280 readings, delays 10 seconds. `transmitData()` is currently commented out.
+- `setup()` — in order: `setupSerial()`, set `SDCARD_CS` HIGH, `setupLoRa()`, `setupSD()`, construct `Arducam_Mega` on the heap (stored as `myCAM` pointer), 200 ms delay, `setupCamera()` (sets `CAMERA_CS` HIGH, then loops `myCAM->begin()`), `setupBME280()`.
+- `loop()` — reads GPS, builds telemetry message, logs it to SD unconditionally, then if `has_fix`: prints "Fix acquired!", captures an image, and transmits telemetry over LoRa; otherwise prints "No fix yet, retrying...". Delays 10 seconds.
 
 **Key functions:**
 - `captureImage()` — opens file, triggers `takePicture`, calls `saveImage`
 - `saveImage()` — drains camera FIFO via `readBuff` in 255-byte chunks, writes to SD
 - `openImageFile()` — calls `buildFilename()` to derive the filename from GPS time, opens file for write
+- `logTelemetry(msg)` — appends a telemetry string to `obs/data.txt` on the SD card; called every loop regardless of fix status
+- `buildTelemetryMessage(gps_data)` — builds a CSV string: `TS:<epoch>,LAT:<v>,LON:<v>,ALT:<v>,TMP:<v>,HUM:<v>,PRS:<v>`; epoch cast to `uint32_t`
+- `transmitData(msg)` — transmits the telemetry string over LoRa; called only when `has_fix`
 - `setupSerial()` — initialises `Serial` (USB, 9600) and `Serial1` (GPS, 9600)
 - `setupSD()` / `setupCamera()` / `setupBME280()` / `setupLoRa()` — single-responsibility helpers
-- `transmitData()` — transmits GPS (lat, lon, alt) and BME280 (temp, humidity, pressure) as CSV over LoRa at 915 MHz
 - `toEpoch(gps_data)` — converts GPS date/time strings to `time_t` using `tmElements_t` + `makeTime()` from TimeLib. Returns `0` if either string is too short.
-- `buildFilename(gps_data, name)` — adds a 10-hour AEST offset to the `time_t` from `toEpoch()`, then calls `breakTime()` to decompose the result, ensuring correct month/year rollover. Writes `pictures/YYYYMMDD_HHMMSS.jpg` into `name`.
+- `buildFilename(gps_data, name)` — adds a 10-hour AEST offset to the `time_t` from `toEpoch()`, then calls `breakTime()` to decompose the result, ensuring correct month/year rollover. Writes `pics/HHMMSS.jpg` into `name` (basename kept to 6 chars — see 8.3 filename constraint below).
 
 ## Camera
 
-- `myCAM` is an `Arducam_Mega*` pointer constructed on the heap in `setup()` after CS pins are set HIGH
-- Image mode is `CAM_IMAGE_MODE_FHD` (1920x1080); capture takes approximately 5 seconds
+- `myCAM` is an `Arducam_Mega*` pointer constructed on the heap in `setup()`; `CAMERA_CS` is set HIGH afterward, inside `setupCamera()`
+- Image mode is `CAM_IMAGE_MODE_WQXGA2` (2592x1944, 5MP)
 - `myCAM->begin()` returns `CAM_ERR_SUCCESS` (value `0`) on success; the check is `== CAM_ERR_SUCCESS`, not a boolean truth test
+- Dependency is a fork, not upstream: `https://github.com/tarciosaraiva/Arducam_Mega.git#samd21-support`. Upstream (`ArduCAM/Arducam_Mega`, both v2.0.9 and v3.0.0) never added SAMD21 to `Platform.h`'s HAL dispatch, so `myCAM->begin()` etc. fail to link on the MKR WAN 1310 with "undefined reference to `arducamSpiCsPinLow`/`arducamSpiCsPinHigh`/`arducamCsOutputMode`". The fork adds `defined(ARDUINO_ARCH_SAMD)` to the existing `ArduinoHal.h` branch in `Platform.h` — that HAL is already generic `SPI.h`/`digitalWrite()`/`pinMode()`, so it works unmodified once selected. If this dependency is ever repointed at upstream, reapply that one-line patch.
 
 ## LoRa
 
-- Module: Duinotech XC4392 (SX1276-based shield)
+- Module: onboard Murata CMWX1ZZABZ (SX1276-based), dedicated SPI1 bus
 - Role: transmitter only
 - Frequency: 915 MHz (Australia)
-- Packet format: `LAT:<v>,LON:<v>,ALT:<v>,TMP:<v>,HUM:<v>,PRS:<v>`
-- `setupLoRa()` and `transmitData()` are currently commented out
+- Packet format: `TS:<epoch>,LAT:<v>,LON:<v>,ALT:<v>,TMP:<v>,HUM:<v>,PRS:<v>`
+- `setupLoRa()` and `transmitData()` are active; transmission happens only when GPS has a fix
+- `setupLoRa()` does not call `LoRa.setPins()` — `sandeepmistry/LoRa` auto-detects `ARDUINO_SAMD_MKRWAN1310` and wires SPI1 + internal CS/RESET/DIO0 itself
 
 ## Known constraints
 
 - `readBuff` max transfer size is 255 bytes (hardware SPI limit)
-- Camera uses hardware SPI (pins 11/12/13); SD card uses software SPI (pins 5/6/8) via SdFat's `SoftSpiDriver`. This is necessary because the Arducam Mega does not tristate MISO when its CS is HIGH, which would corrupt SD reads on a shared hardware SPI bus. The `SPI_DRIVER_SELECT=2` build flag in `platformio.ini` enables `SoftSpiDriver` in SdFat.
+- Camera (`CAMERA_CS` 6) and SD card (`SDCARD_CS` 4) share the board's main hardware SPI bus. The Arducam Mega does not tristate MISO when its CS is high, which can corrupt SD transactions on a shared bus — if intermittent SD read/write failures show up, this is the first thing to check.
+- SD card uses `arduino-libraries/SD` (the classic library, wrapping an old SdFat core), which only supports 8.3 short filenames — no VFAT/long-filename support. Every directory and file name must fit an 8-char basename + 3-char extension (e.g. `pics`, `obs`, `data.txt`, `HHMMSS.jpg`). A name that's too long doesn't error — `SdFile::make83Name()` just returns `false`, so `SD.mkdir()`/`SD.open()` silently fail.
 - GPS uses the local `GPSParser` library (`lib/GPSParser/`); reads `$GPRMC`, `$GPGGA`, `$GPGSA` sentences from Serial1
-- On Renesas RA4M1, `time_t` is `long long int`. `buildTelemetryMessage()` casts the result of `toEpoch()` to `uint32_t` before appending to an Arduino `String` to resolve the ambiguous overload.
+- `time_t` width varies by Arduino core. `buildTelemetryMessage()` casts the result of `toEpoch()` to `uint32_t` before appending to an Arduino `String` to keep the overload resolution unambiguous regardless of core.
