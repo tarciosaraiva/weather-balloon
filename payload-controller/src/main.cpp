@@ -1,36 +1,25 @@
 #include <Adafruit_BME280.h>
 #include <TimeLib.h>
 #include <Arducam_Mega.h>
-#include <Arduino.h>
 #include <GPSParser.h>
 #include <LoRa.h>
-#include <SdFat.h>
-#include <SdCard/SdSpiCard/SpiDriver/SdSpiSoftDriver.h>
+#include <SD.h>
+#include <SPI.h>
 
 // constants
 constexpr int CAM_BUFFER_SIZE = 255;
-constexpr int CAMERA_CS = 7;
+constexpr int CAMERA_CS = 6;
 constexpr int SDCARD_CS = 4;
-constexpr int SD_MOSI_PIN = 5;
-constexpr int SD_MISO_PIN = 6;
-constexpr int SD_SCK_PIN = 8;
 
 constexpr int BME_AWS_ADDR = 0x77;
-constexpr int LORA_SS_PIN = 10;
-constexpr int LORA_RESET_PIN = 9;
-constexpr int LORA_DIO0_PIN = 2;
 constexpr long LORA_FREQ = 915E6;
-
-SoftSpiDriver<SD_MISO_PIN, SD_MOSI_PIN, SD_SCK_PIN> softSpi;
-SdFat32 sd;
-#define SD_CONFIG SdSpiConfig(SDCARD_CS, DEDICATED_SPI, SD_SCK_MHZ(0), &softSpi)
 
 // globals
 unsigned long captureStart = 0;
 
 Adafruit_BME280 bme;
 Arducam_Mega* myCAM = nullptr;
-File32 outFile;
+File outFile;
 GPSReader gps(Serial1);
 
 time_t toEpoch(const GPSData &gps_data)
@@ -53,15 +42,14 @@ void buildFilename(const GPSData &gps_data, char *name)
   time_t t = toEpoch(gps_data) + (10UL * 3600UL);
   tmElements_t tm;
   breakTime(t, tm);
-  sprintf(name, "pictures/%04d%02d%02d_%02d%02d%02d.jpg",
-    tm.Year + 1970, tm.Month, tm.Day, tm.Hour, tm.Minute, tm.Second);
+  sprintf(name, "pics/%02d%02d%02d.jpg", tm.Hour, tm.Minute, tm.Second);
 }
 
 void openImageFile(const GPSData &gps_data)
 {
   char name[29] = {0};
   buildFilename(gps_data, name);
-  outFile = sd.open(name, O_WRONLY | O_CREAT | O_TRUNC);
+  outFile = SD.open(name, FILE_WRITE);
   if (!outFile)
   {
     Serial.println(F("Could not open file."));
@@ -72,7 +60,7 @@ void openImageFile(const GPSData &gps_data)
 
 void logTelemetry(const String &msg)
 {
-  File32 logFile = sd.open("telemetry/datalogger.txt", O_WRONLY | O_CREAT | O_APPEND);
+  File logFile = SD.open("obs/data.txt", FILE_WRITE);
   if (!logFile)
   {
     Serial.println(F("Could not open telemetry file."));
@@ -104,7 +92,7 @@ void captureImage(const GPSData &gps_data)
   captureStart = millis();
   Serial.print(F("Image capture started..."));
   openImageFile(gps_data);
-  myCAM->takePicture(CAM_IMAGE_MODE_FHD, CAM_IMAGE_PIX_FMT_JPG);
+  myCAM->takePicture(CAM_IMAGE_MODE_WQXGA2, CAM_IMAGE_PIX_FMT_JPG);
   saveImage();
 }
 
@@ -125,13 +113,18 @@ void setupSerial()
 
 void setupDirectories()
 {
-  sd.mkdir("pictures");
-  sd.mkdir("telemetry");
+  if (SD.mkdir("pics")) {
+    Serial.println(F("'pictures' folder setup."));
+  }
+
+  if (SD.mkdir("obs")) {
+    Serial.println(F("'telemetry' folder setup."));
+  }
 }
 
 void setupSD()
 {
-  while (!sd.begin(SD_CONFIG))
+  while (!SD.begin(SDCARD_CS))
   {
     Serial.println(F("SD init failed."));
     delay(1000);
@@ -142,6 +135,7 @@ void setupSD()
 
 void setupCamera()
 {
+  setPin(CAMERA_CS);
   while (myCAM->begin() != CAM_ERR_SUCCESS)
   {
     Serial.println(F("Camera could not be initialised."));
@@ -166,15 +160,14 @@ void setupBME280()
 
 void setupLoRa()
 {
-  LoRa.setPins(LORA_SS_PIN, LORA_RESET_PIN, LORA_DIO0_PIN);
   while (!LoRa.begin(LORA_FREQ))
   {
     Serial.println(F("LoRa init failed, retrying..."));
     delay(1000);
   }
 
-  // LoRa.setTxPower(20);
-  // LoRa.setSpreadingFactor(11);
+  LoRa.setTxPower(20);
+  LoRa.setSpreadingFactor(11);
   // LoRa.setSignalBandwidth(250E3);
 
   Serial.println(F("LoRa ready."));
@@ -204,11 +197,9 @@ void setup()
 {
   setupSerial();
 
-  setPin(CAMERA_CS);
   setPin(SDCARD_CS);
-  // setPin(LORA_SS_PIN);
 
-  // setupLoRa();
+  setupLoRa();
   setupSD();
 
   myCAM = new Arducam_Mega(CAMERA_CS);
@@ -220,40 +211,17 @@ void setup()
 void loop()
 {
   GPSData gps_data = gps.get_data();
-
-  // Serial.print(F("Fix: "));
-  // Serial.print(gps_data.has_fix ? "Yes" : "No");
-  // Serial.print(F(", Latitude: "));
-  // Serial.print(gps_data.latitude, 6);
-  // Serial.print(F(", Longitude: "));
-  // Serial.print(gps_data.longitude, 6);
-  // Serial.print(F(", Altitude: "));
-  // Serial.print(gps_data.altitude, 6);
-  // Serial.print(F(", Satellites: "));
-  // Serial.print(gps_data.satellites);
-  // Serial.print(F(", Time: "));
-  // Serial.print(gps_data.time);
-  // Serial.print(F(", Date: "));
-  // Serial.println(gps_data.date);
-
-  // Serial.println(F("------------------------------"));
-  // Serial.print(F("Temp: "));
-  // Serial.println(bme.readTemperature());
-  // Serial.print(F("Humidity: "));
-  // Serial.println(bme.readHumidity());
-  // Serial.print(F("Pressure: "));
-  // Serial.println(bme.readPressure() / 100.0F);
-  // Serial.println(F("------------------------------"));
-
   String telemetry = buildTelemetryMessage(gps_data);
   logTelemetry(telemetry);
 
   if (gps_data.has_fix)
   {
+    Serial.println(F("Fix acquired!"));
     captureImage(gps_data);
+    transmitData(telemetry);
+  } else {
+    Serial.println(F("No fix yet, retrying..."));
   }
-
-  // transmitData(telemetry);
 
   delay(10000);
 }
