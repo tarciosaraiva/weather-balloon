@@ -1,6 +1,12 @@
-# Weather Balloon
+# Weather Balloon — Payload Controller
 
-Arduino MKR WAN 1310 (SAMD21) payload for a high-altitude balloon launch.
+Arduino MKR WAN 1310 (SAMD21) payload for a high-altitude balloon launch. Flies on the balloon: reads GPS and a BME280 atmospheric sensor, logs telemetry to SD, captures photos, and transmits telemetry to the ground over LoRa. See [payload-receiver](../payload-receiver/README.md) for the ground station, and the [repo README](../README.md) for the system as a whole.
+
+## Board choice
+
+`board = mkrwan1310`, `platform = atmelsam` (see [platformio.ini](platformio.ini)) — Arduino MKR WAN 1310, SAMD21 MCU.
+
+Picked for the onboard Murata CMWX1ZZABZ LoRa module: it's wired internally on a dedicated SPI1 bus, so there's no LoRa shield and no extra CS/RESET/DIO0 pins to route alongside the camera and SD card, which already share the board's main SPI bus. The SAMD21 core also gives more RAM/flash than an Uno-class board, which matters here since the camera library, SD library, GPS parsing, and Time library all run concurrently.
 
 ## Hardware
 
@@ -40,7 +46,7 @@ TS:<epoch>,LAT:<v>,LON:<v>,ALT:<v>,TMP:<v>,HUM:<v>,PRS:<v>
 
 ## Build & flash
 
-Uses [PlatformIO](https://platformio.org/) targeting Arduino MKR WAN 1310 (SAMD21).
+Uses [PlatformIO](https://platformio.org/) targeting Arduino MKR WAN 1310 (SAMD21, `board = mkrwan1310`).
 
 ```bash
 pio run              # build

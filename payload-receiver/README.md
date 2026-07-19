@@ -1,6 +1,12 @@
-# Payload Receiver
+# Weather Balloon — Payload Receiver
 
-Arduino Uno R3 receiver for the weather balloon payload.
+Arduino Uno R3 ground station for the weather balloon payload. Listens for LoRa telemetry packets sent by [payload-controller](../payload-controller/README.md) and prints them to serial. See the [repo README](../README.md) for the system as a whole.
+
+## Board choice
+
+`board = uno`, `platform = atmelavr` (see [platformio.ini](platformio.ini)) — Arduino Uno R3, ATmega328P.
+
+The receiver only needs to demodulate incoming LoRa packets and print them to serial, so a plain Uno R3 paired with a Duinotech XC4392 LoRa shield is enough — no onboard radio, storage, or camera requirements that would call for a more capable board.
 
 ## Hardware
 
@@ -17,12 +23,12 @@ On boot, initialises serial and LoRa radio (spreading factor 11, 250 kHz signal 
 Expected packet format:
 
 ```
-LAT:<v>,LON:<v>,ALT:<v>,TMP:<v>,HUM:<v>,PRS:<v>
+TS:<epoch>,LAT:<v>,LON:<v>,ALT:<v>,TMP:<v>,HUM:<v>,PRS:<v>
 ```
 
 ## Build & flash
 
-Uses [PlatformIO](https://platformio.org/) targeting Arduino Uno R3 (ATmega328P).
+Uses [PlatformIO](https://platformio.org/) targeting Arduino Uno R3 (ATmega328P, `board = uno`).
 
 ```bash
 pio run                  # build
