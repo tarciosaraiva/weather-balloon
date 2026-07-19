@@ -32,7 +32,7 @@ The SD card uses the classic `arduino-libraries/SD` library, which only supports
 
 ## LoRa transmission
 
-Transmits at 915 MHz (Australia) via the board's onboard Murata CMWX1ZZABZ (SX1276-based) module, transmitter mode only, sent whenever GPS has a fix. Packet format:
+Transmits at 915 MHz (Australia) via the board's onboard Murata CMWX1ZZABZ (SX1276-based) module, transmitter mode only, sent whenever GPS has a fix. TX power 20 dBm, spreading factor 11, 250 kHz signal bandwidth (high-range config; receiver must match). Packet format:
 
 ```
 TS:<epoch>,LAT:<v>,LON:<v>,ALT:<v>,TMP:<v>,HUM:<v>,PRS:<v>

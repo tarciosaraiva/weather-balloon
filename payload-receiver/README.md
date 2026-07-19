@@ -12,7 +12,7 @@ Arduino Uno R3 receiver for the weather balloon payload.
 
 ## What it does
 
-On boot, initialises serial and LoRa radio. Then listens for incoming packets from the payload controller and prints each packet and its RSSI to serial.
+On boot, initialises serial and LoRa radio (spreading factor 11, 250 kHz signal bandwidth — matches the controller's high-range settings). Then listens for incoming packets from the payload controller and prints each packet and its RSSI to serial.
 
 Expected packet format:
 

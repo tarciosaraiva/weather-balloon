@@ -26,11 +26,12 @@ Single-file Arduino sketch (`src/main.cpp`) targeting Arduino Uno R3 (ATmega328P
 
 **Key functions:**
 - `setupSerial()` — initialises `Serial` at 9700 baud
-- `setupLoRa()` — configures pins, starts LoRa at 915 MHz, enters receive mode
+- `setupLoRa()` — configures pins, starts LoRa at 915 MHz, sets spreading factor 11 and 250 kHz signal bandwidth, enters receive mode
 
 ## LoRa
 
 - Module: Duinotech XC4392 (SX1276-based shield)
 - Role: receiver only
 - Frequency: 915 MHz (Australia)
+- Spreading factor 11, 250 kHz signal bandwidth — must match `payload-controller`'s radio settings for the link to demodulate
 - Expected packet format: `LAT:<v>,LON:<v>,ALT:<v>,TMP:<v>,HUM:<v>,PRS:<v>`

@@ -50,6 +50,7 @@ Single-file Arduino sketch (`src/main.cpp`) targeting Arduino MKR WAN 1310 (SAMD
 - Module: onboard Murata CMWX1ZZABZ (SX1276-based), dedicated SPI1 bus
 - Role: transmitter only
 - Frequency: 915 MHz (Australia)
+- TX power 20 dBm, spreading factor 11, 250 kHz signal bandwidth — high-range link config; `payload-receiver` must set matching spreading factor/bandwidth to demodulate
 - Packet format: `TS:<epoch>,LAT:<v>,LON:<v>,ALT:<v>,TMP:<v>,HUM:<v>,PRS:<v>`
 - `setupLoRa()` and `transmitData()` are active; transmission happens only when GPS has a fix
 - `setupLoRa()` does not call `LoRa.setPins()` — `sandeepmistry/LoRa` auto-detects `ARDUINO_SAMD_MKRWAN1310` and wires SPI1 + internal CS/RESET/DIO0 itself
