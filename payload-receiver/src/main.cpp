@@ -23,6 +23,10 @@ void setupLoRa()
     Serial.println(F("LoRa init failed, retrying..."));
     delay(1000);
   }
+
+  LoRa.setSpreadingFactor(11);
+  LoRa.setSignalBandwidth(250E3);
+
   LoRa.receive();
   Serial.println(F("LoRa ready."));
 }
